@@ -18,13 +18,20 @@ exports.insertMood = (req, res) => {
   });
 }
 
-exports.getMoods = (req, res) => {
-  const id = req.body.id
-  const moodsList = Mood.find({user_id: id}).sort({time : -1}).limit(5000).toArray()
-  if (err) {
-    res.status(500).send({ message: err });
-    return;
+exports.getMoods = async (req, res) => {
+  const moodsList = await Mood.find({user_id: req.query.user_id})
+  if (moodsList){
+    res.status(200).send({message: moodsList})
   }
-  res.status(200).send({message: moodsList})
   return;
+}
+
+exports.deleteMoods = async (req, res) => {
+    // TODO: accept an array
+    console.log(req.body.id)
+    await Mood.deleteOne(
+        {id: req.body.id},
+     )
+    
+     res.status(200).send({message: "Removed"})
 }

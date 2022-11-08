@@ -20,4 +20,9 @@ module.exports = function(app) {
     controller.insertMood
   );
 
+  app.delete(
+    "/api/moods",
+    controller.deleteMoods
+  );
+
 };
