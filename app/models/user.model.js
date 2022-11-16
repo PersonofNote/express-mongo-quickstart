@@ -15,7 +15,7 @@ const User = mongoose.model(
         type: String,
         required: [true, 'Password is required']
     },
-    premium: Boolean,
+    company: { type: String },
     roles: [
       {
         type: mongoose.Schema.Types.ObjectId,

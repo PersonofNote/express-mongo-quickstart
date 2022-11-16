@@ -1,109 +1,66 @@
 const config = require("../config/auth.config");
-const db = require("../models");
-const User = db.user;
-const Role = db.role;
+const Airtable = require('airtable')
+const dotenv = require('dotenv').config()
+const base = Airtable.base(process.env.AIRTABLE_BASE_ID);
+const providerTable = process.env.AIRTABLE_PROVIDERS_TABLE;
+
 
 var jwt = require("jsonwebtoken");
 var bcrypt = require("bcryptjs");
 
 exports.signup = (req, res) => {
-  const user = new User({
-    username: req.body.username,
+  const newProvider = {
+    name: req.body.companyName,
     email: req.body.email,
     password: bcrypt.hashSync(req.body.password, 8)
-  });
-
-  user.save((err, user) => {
+  };
+  base(providerTable).create([
+    {
+      "fields": {
+        "Name": newProvider.name,
+        "DX co Name": newProvider.name,
+        "Email": newProvider.email,
+        "encrypted_password": newProvider.password
+      }
+    }
+  ], (err,records) => {
     if (err) {
-      res.status(500).send({ message: err });
+      console.error(err);
       return;
     }
-
-    if (req.body.roles) {
-      Role.find(
-        {
-          name: { $in: req.body.roles }
-        },
-        (err, roles) => {
-          if (err) {
-            res.status(500).send({ message: err });
-            return;
-          }
-
-          user.roles = roles.map(role => role._id);
-          user.save(err => {
-            if (err) {
-              res.status(500).send({ message: err });
-              return;
-            }
-
-            res.send({ message: "User was registered successfully!" });
-          });
-        }
-      );
-    } else {
-      Role.findOne({ name: "user" }, (err, role) => {
-        if (err) {
-          res.status(500).send({ message: err });
-          return;
-        }
-
-        user.roles = [role._id];
-        user.save(err => {
-          if (err) {
-            res.status(500).send({ message: err });
-            return;
-          }
-
-          res.send({ message: "User was registered successfully!" });
-        });
-      });
-    }
+    records.forEach(record => {
+      console.log(record.getId());
+    });
   });
+  res.status(200).send({msg: "You have successfully registered, and can now log in"});
 };
 
 exports.signin = (req, res) => {
-  User.findOne({
-    email: req.body.email
-  })
-    .populate("roles", "-__v")
-    .exec((err, user) => {
-      if (err) {
-        res.status(500).send({ message: err });
-        return;
-      }
-
-      if (!user) {
-        return res.status(404).send({ message: "User Not found." });
-      }
-
+  // TODO: See if there's a cleaner way of doing this/targeting one element
+  base(providerTable).select({filterByFormula: `{Name} = "${req.body.companyName}"`}).firstPage((err, records) => {
+    if (err) { console.error(err); res.status(400).send({msg: "Could not find company"}); }
+    records.forEach(record => {
       var passwordIsValid = bcrypt.compareSync(
         req.body.password,
-        user.password
+        record.get('encrypted_password')
       );
-
       if (!passwordIsValid) {
         return res.status(401).send({
           accessToken: null,
           message: "Invalid Password!"
         });
       }
-
-      var token = jwt.sign({ id: user.id }, config.secret, {
-        expiresIn: 86400 // 24 hours
+      const recordId = record.get('record_id')
+      let token = jwt.sign({ id: recordId }, config.secret, {
+        expiresIn: 86400
       });
-
-      var authorities = [];
-
-      for (let i = 0; i < user.roles.length; i++) {
-        authorities.push("ROLE_" + user.roles[i].name.toUpperCase());
-      }
-      res.status(200).send({
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        roles: authorities,
+      const companyData = {
+        companyName: record.get('Name'),
+        companyId: recordId,
         accessToken: token
-      });
-    });
+      }
+      console.log(companyData)
+      res.status(200).send({msg: companyData});
+  });
+});
 };
